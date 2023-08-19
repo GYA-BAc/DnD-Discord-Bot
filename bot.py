@@ -1,24 +1,15 @@
 import sys
 import os
 
-CURR_DIR = os.getcwd()
+CURR_DIR = os.path.dirname(os.path.abspath(__file__)).split(os.sep)
 #print(CURR_DIR)
 
-loaded_packages = False
-try:
-    os.chdir("..")
-    #print(os.getcwd())
-    sys.path.append(f"{os.getcwd()}/site-packages")
-    loaded_packages = True
-except Exception as e:
-    print(e)
-
-os.chdir(CURR_DIR)
-if (not loaded_packages):
-    raise Exception("Could not load site-packages")
+sys.path.append(f"{os.sep.join(CURR_DIR[:-1])}/site-packages")
+# print(__file__)
+# print(CURR_DIR)
 
 # load bot key
-with open(".env") as file:
+with open(f"{os.sep.join(CURR_DIR)}{os.sep}.env") as file:
     KEY = file.readline().strip()
 
 
@@ -215,7 +206,7 @@ async def roll(ctx, *args):
                 elif (roll_results == [20 for _ in range(l)]):
                     retval += "(Natural 20)"
 
-            if dice[0] in ["1", "d"]:
+            if dice[0][0] in ["1", "d"]:
                 if (roll_results[0] == 1):
                     retval += "(Natural 1)"
                 elif (roll_results[0] == 20):
@@ -468,6 +459,4 @@ async def play(ctx, url, *args):
 
 
 bot.run(KEY)
-
-
 
