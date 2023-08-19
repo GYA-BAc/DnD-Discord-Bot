@@ -362,8 +362,7 @@ async def skip(ctx):
 YDL_OPTIONS = {'format': 'bestaudio', 'youtube_include_dash_manifest':'False'}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
-bot.queue = []
-bot.queue_index = 0
+bot.song_index = 0
 
 PLAY_SYNTAX = "Syntax: !play <url> <options>"
 @bot.command(
@@ -382,24 +381,52 @@ async def play(ctx, url, *args):
         await ctx.author.voice.channel.connect()
         voice = ctx.voice_client
 
-    with YoutubeDL(YDL_OPTIONS) as ydl:
-        info = ydl.extract_info(url, download=False)
-        
-        #source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop, download=False)    
+    # with YoutubeDL(YDL_OPTIONS) as ydl:
+      #  info = ydl.extract_info(url, download=False)
+    
 
-
-    if ('entries' in info):
-        bot.queue = [i for i in info['entries']]
+    # if ('entries' in info):
+      #  bot.queue = [i for i in info['entries']]
+    # else:
+      #  bot.queue = [info]
+    
+    # check for specified playlist index
+    check = re.findall("&index=\d+", url)
+    if (len(check) > 0):
+        bot.song_index = int(check[-1].split('=')[-1]) - 1
     else:
-        bot.queue = [info]
+        bot.song_index = 0
 
-    bot.queue_index = 0
+
     bot.playing = True
+    is_playlist = False
 
     while bot.playing:
-        # print(bot.queue[bot.queue_index]["url"])
-        URL = bot.queue[bot.queue_index]['url']
         
+
+        specific_options = {**YDL_OPTIONS, **{'playlist_items': f'{bot.song_index+1}'}}
+        
+        with YoutubeDL(specific_options) as ydl:
+            current_song = ydl.extract_info(url, download=False)
+            # print(bot.queue[bot.queue_index]['original_url'])
+            #URL = vid_info['']
+
+        
+
+        # print([key for key in bot.queue[bot.queue_index]])
+        # URL = bot.queue[bot.queue_index]['format'][0]['url']
+        # print(bot.queue[bot.queue_index]['original_url'])
+        # URL = bot.queue[bot.queue_index]['original_url']
+        # URL = bot.queue[bot.queue_index]['url']
+        length = 1
+
+        try:
+            URL = current_song['entries'][0]['url']
+            is_playlist = True
+            length = int(current_song['playlist_count'])
+        except KeyError:
+            URL = current_song['url']
+
         bot.looping = False
         bot.paused = False
         if voice.is_playing():
@@ -411,21 +438,27 @@ async def play(ctx, url, *args):
         
         #source = await ydl.YTDLSource.create_source(ctx, URL, loop=self.bot.loop, download=False)    
         #voice.play(source)
-
+        
         voice.play(discord.FFmpegPCMAudio(URL, **FFMPEG_OPTIONS))
         voice.source = discord.PCMVolumeTransformer(voice.source, volume=vol)
-    
-        await ctx.send(f"Playing **{bot.queue[bot.queue_index]['title']}**")
+        
+        if (is_playlist):
+            message = f"Playing **{current_song['entries'][0]['title']}** ({bot.song_index+1}/{length})"
+        else:
+            message = f"Playing **{current_song['title']}**"
+        await ctx.send(message)
+
 
         while (voice.is_playing() or bot.paused):
             await sleep(5)
 
-        if (bot.queue_index+1 < len(bot.queue)):
-            bot.queue_index += 1
+        if (bot.song_index+1 < length):
+            bot.song_index += 1
         else:
             if not bot.looping:
                 bot.playing = False
-            bot.queue_index = 0
+            bot.song_index = 0
+
 
     bot.playing = False
     bot.looping = False
