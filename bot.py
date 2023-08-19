@@ -155,7 +155,7 @@ async def roll(ctx, *args):
             raise Exception
 
         # make sure dice make sense with modifiers
-        if (len({die.split("d")[-1] for die in dice}) > 1):
+        if (len({die.split("d")[-1] for die in dice}) > 1 and (adv or disadv)):
             retval = f"Error: can only use advantage/disadvantage with a single type of die"
             raise Exception
 
