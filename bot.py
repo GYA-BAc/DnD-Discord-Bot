@@ -27,8 +27,11 @@ from discord.ext import commands, tasks
 
 import re
 import random
-
 from asyncio import sleep, get_event_loop
+
+from yt_dlp import YoutubeDL
+
+
 
 
 help_command = commands.DefaultHelpCommand(
@@ -37,8 +40,11 @@ help_command = commands.DefaultHelpCommand(
 
 bot = commands.Bot(command_prefix="!", intents = discord.Intents.all(), help_command=help_command)
 
+bot.playing = False
 bot.looping = False
 bot.paused = False
+
+
 
 async def ainput(string: str="") -> str:
     await get_event_loop().run_in_executor(
@@ -230,6 +236,201 @@ async def roll(ctx, *args):
     
     # print(retval)
     await ctx.reply(retval)
+
+
+JOIN_SYNTAX = "Syntax: !join <channel>"
+
+@bot.command(
+    brief=JOIN_SYNTAX,
+    description=f"{JOIN_SYNTAX}\n Bot will join the specified channel, or user's channel if not specified"
+)
+async def join(ctx, *args):
+
+    if (len(args) > 0):
+        for c in (c for c in ctx.guild.channels if c.type==discord.ChannelType.voice):
+            if (c.name == args[0]):
+                channel = c
+                break
+        else:
+            channel = None
+    else:
+        if (ctx.author.voice is None):
+            channel = None
+        else:
+            channel = ctx.author.voice.channel
+    if (channel is None):
+        await ctx.reply(f"Error: voice channel {(args[0] + ' ' if (len(args)>0) else '')}not found")
+        return
+
+    try:
+        await channel.connect()
+    except discord.ClientException: #if in another channel
+        voice = ctx.voice_client
+        await ctx.voice_client.move_to(channel)
+
+        
+LEAVE_SYNTAX = "Syntax: !leave"
+@bot.command(
+    brief=LEAVE_SYNTAX,
+    description=f"{LEAVE_SYNTAX}\nBot will leave its current channel"
+)
+async def leave(ctx):
+
+    if (ctx.voice_client is None):
+        await ctx.reply("Error: bot is not in a channel")
+        return
+    await ctx.voice_client.disconnect()
+
+
+PAUSE_SYNTAX = "Syntax: !pause"
+@bot.command(
+    brief=PAUSE_SYNTAX,
+    description=f"{PAUSE_SYNTAX}\nIf the bot is playing a song, pause. '!resume' to resume"
+)
+async def pause(ctx):
+    
+    voice = ctx.voice_client
+
+    if (voice is None):
+        await ctx.reply("Error: bot is not connected to a channel")
+        return
+
+    if (bot.paused):
+        await ctx.reply("Error: bot is already paused")
+        return
+
+    voice.pause()
+    bot.paused = True
+
+
+RESUME_SYNTAX = "Syntax: !resume"
+@bot.command(
+    brief=PAUSE_SYNTAX,
+    description=f"{RESUME_SYNTAX}\nIf the bot is paused, resume"
+)
+async def resume(ctx):
+    voice = ctx.voice_client
+
+    if (not bot.playing):
+        await ctx.reply("Error: bot is not playing a song")
+        return
+
+    if (bot.paused == False):
+        await ctx.reply("Error: bot is already playing")
+        return
+
+    bot.paused = False
+    if (not voice.is_playing()):
+        voice.resume()
+
+
+STOP_SYNTAX = "Syntax: !stop"
+@bot.command(
+    brief=STOP_SYNTAX,
+    description=f"{STOP_SYNTAX}\nStop the current song the bot is playing"
+)
+async def stop(ctx):
+    
+    if (not bot.playing):
+        await ctx.reply("Error: bot is not currently playing a song")
+        return
+
+    voice = ctx.voice_client
+
+    #reset bot stat
+    bot.playing = False
+    bot.looping = False
+    bot.paused = False
+
+    voice.stop()
+
+
+SKIP_SYNTAX = "Syntax: !skip"
+@bot.command(
+    brief=SKIP_SYNTAX,
+    description=f"{SKIP_SYNTAX}\nIf the bot is playing a playlist, skip current song"
+)
+async def skip(ctx):
+
+    if (not bot.playing):
+        await ctx.reply("Error: bot is not currently playing a song")
+        return
+    ctx.voice_client.stop()
+
+
+
+YDL_OPTIONS = {'format': 'bestaudio', 'youtube_include_dash_manifest':'False'}
+FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
+
+bot.queue = []
+bot.queue_index = 0
+
+PLAY_SYNTAX = "Syntax: !play <url> <options>"
+@bot.command(
+    brief=PLAY_SYNTAX,
+    description=f"{PLAY_SYNTAX}\nPlay the specified song/playing (youtube link). Play options: 'loop', '<volume>%'"
+)
+async def play(ctx, url, *args):
+
+    vol = .2 #default
+    for i in args:
+        if (i[-1] == '%'):
+            vol = int(i[:-1])//100
+
+    voice = ctx.voice_client
+    if (voice == None): # join if not connected
+        await ctx.author.voice.channel.connect()
+        voice = ctx.voice_client
+
+    with YoutubeDL(YDL_OPTIONS) as ydl:
+        info = ydl.extract_info(url, download=False)
+        
+        #source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop, download=False)    
+
+
+    if ('entries' in info):
+        bot.queue = [i for i in info['entries']]
+    else:
+        bot.queue = [info]
+
+    bot.queue_index = 0
+    bot.playing = True
+
+    while bot.playing:
+        URL = bot.queue[bot.queue_index]['formats'][0]['url']
+        
+        bot.looping = False
+        bot.paused = False
+        if voice.is_playing():
+            voice.stop()
+
+        if ("loop" in args):
+            bot.looping = True
+        
+        
+        #source = await ydl.YTDLSource.create_source(ctx, URL, loop=self.bot.loop, download=False)    
+        #voice.play(source)
+
+        voice.play(discord.FFmpegPCMAudio(URL, **FFMPEG_OPTIONS))
+        voice.source = discord.PCMVolumeTransformer(voice.source, volume=vol)
+    
+        await ctx.send(f"Playing **{bot.queue[bot.queue_index]['title']}**")
+
+        while (voice.is_playing() or bot.paused):
+            await sleep(5)
+
+        if (bot.queue_index+1 < len(bot.queue)):
+            bot.queue_index += 1
+        else:
+            if not bot.looping:
+                bot.playing = False
+            bot.queue_index = 0
+
+    bot.playing = False
+    bot.looping = False
+    bot.paused = False
+
+
 
 
 bot.run(KEY)
