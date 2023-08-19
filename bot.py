@@ -397,7 +397,8 @@ async def play(ctx, url, *args):
     bot.playing = True
 
     while bot.playing:
-        URL = bot.queue[bot.queue_index]['formats'][0]['url']
+        # print(bot.queue[bot.queue_index]["url"])
+        URL = bot.queue[bot.queue_index]['url']
         
         bot.looping = False
         bot.paused = False
