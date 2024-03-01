@@ -4,6 +4,6 @@
 
 1. clone with git
 2. install discord.py\[voice\] with pip
-3. install FFmpeg
+3. install FFmpeg (if you plan to use music features)
 4. add a .env file with your Discord bot's token
 5. run bot.py with python
