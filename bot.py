@@ -4,10 +4,6 @@ import os
 CURR_DIR = os.path.dirname(os.path.abspath(__file__)).split(os.sep)
 #print(CURR_DIR)
 
-sys.path.append(f"{os.sep.join(CURR_DIR[:-1])}/site-packages")
-# print(__file__)
-# print(CURR_DIR)
-
 # load bot key
 with open(f"{os.sep.join(CURR_DIR)}{os.sep}.env") as file:
     KEY = file.readline().strip()
@@ -48,7 +44,7 @@ async def ainput(string: str="") -> str:
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="Your Suffering | !help"))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="A Whole New World | !help"))
     print('Bot {0.user} is up and running!'.format(bot))
     print("separate commands with '::'")
     while False:
@@ -296,7 +292,7 @@ async def pause(ctx):
 
 RESUME_SYNTAX = "Syntax: !resume"
 @bot.command(
-    brief=PAUSE_SYNTAX,
+    brief=RESUME_SYNTAX,
     description=f"{RESUME_SYNTAX}\nIf the bot is paused, resume"
 )
 async def resume(ctx):
@@ -413,10 +409,11 @@ async def play(ctx, url, *args):
 
         try:
             URL = current_song['entries'][0]['url']
-            is_playlist = True
-            length = int(current_song['playlist_count'])
+            if (current_song['playlist_count'] is not None):
+                is_playlist = True 
+                length = current_song['playlist_count']
         except KeyError:
-            URL = current_song['url']
+             URL = current_song['url']
 
         bot.looping = False
         bot.paused = False
